@@ -145,7 +145,7 @@ class ObjectCacheLock(object):
         self._acquired = False
 
 
-class ObjectCache(object):
+class ObjectCacheFileStrategy(object):
     def __init__(self):
         try:
             self.dir = os.environ["CLCACHE_DIR"]
@@ -161,6 +161,37 @@ class ObjectCache(object):
 
     def cacheDirectory(self):
         return self.dir
+
+    def _cacheEntryDir(self, key):
+        return os.path.join(self.objectsDir, key[:2], key)
+
+    def _manifestDir(self, manifestHash):
+        return os.path.join(self.manifestsDir, manifestHash[:2])
+
+    def _manifestName(self, manifestHash):
+        return os.path.join(self._manifestDir(manifestHash), manifestHash + ".dat")
+
+    def _cachedCompilerOutputName(self, key):
+        return os.path.join(self._cacheEntryDir(key), "output.txt")
+
+    def _cachedCompilerStderrName(self, key):
+        return os.path.join(self._cacheEntryDir(key), "stderr.txt")
+
+
+class ObjectCache(object):
+    def __init__(self):
+        self.strategy = ObjectCacheFileStrategy()
+
+    def cacheDirectory(self):
+        return self.strategy.cacheDirectory()
+
+    @property
+    def lock(self):
+        return self.strategy.lock
+
+    @property
+    def objectsDir(self):
+        return self.strategy.objectsDir
 
     def clean(self, stats, maximumSize):
         currentSize = stats.currentCacheSize()
@@ -315,19 +346,19 @@ class ObjectCache(object):
         return ''
 
     def _cacheEntryDir(self, key):
-        return os.path.join(self.objectsDir, key[:2], key)
+        return self.strategy._cacheEntryDir(key)
 
     def _manifestDir(self, manifestHash):
-        return os.path.join(self.manifestsDir, manifestHash[:2])
+        return self.strategy._manifestDir(manifestHash)
 
     def _manifestName(self, manifestHash):
-        return os.path.join(self._manifestDir(manifestHash), manifestHash + ".dat")
+        return self.strategy._manifestName(manifestHash)
 
     def _cachedCompilerOutputName(self, key):
-        return os.path.join(self._cacheEntryDir(key), "output.txt")
+        return self.strategy._cachedCompilerOutputName(key)
 
     def _cachedCompilerStderrName(self, key):
-        return os.path.join(self._cacheEntryDir(key), "stderr.txt")
+        return self.strategy._cachedCompilerStderrName(key)
 
     @staticmethod
     def _normalizedCommandLine(cmdline):
