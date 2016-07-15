@@ -177,22 +177,6 @@ class ObjectCacheFileStrategy(object):
     def _cachedCompilerStderrName(self, key):
         return os.path.join(self._cacheEntryDir(key), "stderr.txt")
 
-
-class ObjectCache(object):
-    def __init__(self):
-        self.strategy = ObjectCacheFileStrategy()
-
-    def cacheDirectory(self):
-        return self.strategy.cacheDirectory()
-
-    @property
-    def lock(self):
-        return self.strategy.lock
-
-    @property
-    def objectsDir(self):
-        return self.strategy.objectsDir
-
     def clean(self, stats, maximumSize):
         currentSize = stats.currentCacheSize()
         if currentSize < maximumSize:
@@ -252,6 +236,67 @@ class ObjectCache(object):
                 stats.unregisterCacheEntry(fileStat.st_size)
             rmtree(dirPath, ignore_errors=True)
 
+    def hasEntry(self, key):
+        return os.path.exists(self.cachedObjectName(key)) or os.path.exists(self._cachedCompilerOutputName(key))
+
+    def setEntry(self, key, objectFileName, compilerOutput, compilerStderr):
+        ensureDirectoryExists(self._cacheEntryDir(key))
+        if objectFileName is not None:
+            copyOrLink(objectFileName, self.cachedObjectName(key))
+        with open(self._cachedCompilerOutputName(key), 'wb') as f:
+            f.write(compilerOutput.encode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC))
+        if compilerStderr != '':
+            with open(self._cachedCompilerStderrName(key), 'wb') as f:
+                f.write(compilerStderr.encode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC))
+
+    def setManifest(self, manifestHash, manifest):
+        ensureDirectoryExists(self._manifestDir(manifestHash))
+        with open(self._manifestName(manifestHash), 'wb') as outFile:
+            pickle.dump(manifest, outFile)
+
+    def getManifest(self, manifestHash):
+        fileName = self._manifestName(manifestHash)
+        if not os.path.exists(fileName):
+            return None
+        try:
+            with open(fileName, 'rb') as inFile:
+                return pickle.load(inFile)
+        except (IOError, pickle.UnpicklingError):
+            # - file does not exist or cannot be opened (IOError)?
+            # - file is corrupted (pickle.UnpicklingError)
+            return None
+
+    def cachedObjectName(self, key):
+        return os.path.join(self._cacheEntryDir(key), "object")
+
+    def cachedCompilerOutput(self, key):
+        with open(self._cachedCompilerOutputName(key), 'rb') as f:
+            return f.read().decode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC)
+
+    def cachedCompilerStderr(self, key):
+        fileName = self._cachedCompilerStderrName(key)
+        if os.path.exists(fileName):
+            with open(fileName, 'rb') as f:
+                return f.read().decode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC)
+        return ''
+
+
+class ObjectCache(object):
+    def __init__(self):
+        self.strategy = ObjectCacheFileStrategy()
+
+    def cacheDirectory(self):
+        return self.strategy.cacheDirectory()
+
+    @property
+    def lock(self):
+        return self.strategy.lock
+
+    def clean(self, stats, maximumSize):
+        return self.strategy.clean(stats, maximumSize)
+
+    def removeObjects(self, stats, removedObjects):
+        return self.strategy.removeObjects(stats, removedObjects)
 
     @staticmethod
     def getManifestHash(compilerBinary, commandLine, sourceFile):
@@ -302,63 +347,25 @@ class ObjectCache(object):
         return ObjectCache.getHash(manifestHash + keyInManifest)
 
     def hasEntry(self, key):
-        return os.path.exists(self.cachedObjectName(key)) or os.path.exists(self._cachedCompilerOutputName(key))
+        return self.strategy.hasEntry(key)
 
     def setEntry(self, key, objectFileName, compilerOutput, compilerStderr):
-        ensureDirectoryExists(self._cacheEntryDir(key))
-        if objectFileName is not None:
-            copyOrLink(objectFileName, self.cachedObjectName(key))
-        with open(self._cachedCompilerOutputName(key), 'wb') as f:
-            f.write(compilerOutput.encode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC))
-        if compilerStderr != '':
-            with open(self._cachedCompilerStderrName(key), 'wb') as f:
-                f.write(compilerStderr.encode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC))
+        return self.strategy.setEntry(key, objectFileName, compilerOutput, compilerStderr)
 
     def setManifest(self, manifestHash, manifest):
-        ensureDirectoryExists(self._manifestDir(manifestHash))
-        with open(self._manifestName(manifestHash), 'wb') as outFile:
-            pickle.dump(manifest, outFile)
+        return self.strategy.setManifest(manifestHash, manifest)
 
     def getManifest(self, manifestHash):
-        fileName = self._manifestName(manifestHash)
-        if not os.path.exists(fileName):
-            return None
-        try:
-            with open(fileName, 'rb') as inFile:
-                return pickle.load(inFile)
-        except (IOError, pickle.UnpicklingError):
-            # - file does not exist or cannot be opened (IOError)?
-            # - file is corrupted (pickle.UnpicklingError)
-            return None
+        return self.strategy.getManifest(manifestHash)
 
     def cachedObjectName(self, key):
-        return os.path.join(self._cacheEntryDir(key), "object")
+        return self.strategy.cachedObjectName(key)
 
     def cachedCompilerOutput(self, key):
-        with open(self._cachedCompilerOutputName(key), 'rb') as f:
-            return f.read().decode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC)
+        return self.strategy.cachedCompilerOutput(key)
 
     def cachedCompilerStderr(self, key):
-        fileName = self._cachedCompilerStderrName(key)
-        if os.path.exists(fileName):
-            with open(fileName, 'rb') as f:
-                return f.read().decode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC)
-        return ''
-
-    def _cacheEntryDir(self, key):
-        return self.strategy._cacheEntryDir(key)
-
-    def _manifestDir(self, manifestHash):
-        return self.strategy._manifestDir(manifestHash)
-
-    def _manifestName(self, manifestHash):
-        return self.strategy._manifestName(manifestHash)
-
-    def _cachedCompilerOutputName(self, key):
-        return self.strategy._cachedCompilerOutputName(key)
-
-    def _cachedCompilerStderrName(self, key):
-        return self.strategy._cachedCompilerStderrName(key)
+        return self.strategy.cachedCompilerStderr(key)
 
     @staticmethod
     def _normalizedCommandLine(cmdline):
