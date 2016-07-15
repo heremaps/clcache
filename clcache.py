@@ -284,9 +284,10 @@ class ObjectCacheFileStrategy(object):
 class ObjectCache(object):
     def __init__(self):
         self.strategy = ObjectCacheFileStrategy()
+        self.config = ObjectCacheFileStrategy()
 
-    def cacheDirectory(self):
-        return self.strategy.cacheDirectory()
+    def cacheConfigDirectory(self):
+        return self.config.cacheDirectory()
 
     @property
     def lock(self):
@@ -420,7 +421,7 @@ class Configuration(object):
 
     def __init__(self, objectCache):
         self._objectCache = objectCache
-        self._cfg = PersistentJSONDict(os.path.join(objectCache.cacheDirectory(),
+        self._cfg = PersistentJSONDict(os.path.join(objectCache.cacheConfigDirectory(),
                                                     "config.txt"))
         for setting, defaultValue in self._defaultValues.items():
             if setting not in self._cfg:
@@ -458,7 +459,7 @@ class CacheStatistics(object):
 
     def __init__(self, objectCache):
         self.objectCache = objectCache
-        self._stats = PersistentJSONDict(os.path.join(objectCache.cacheDirectory(),
+        self._stats = PersistentJSONDict(os.path.join(objectCache.cacheConfigDirectory(),
                                                       "stats.txt"))
         for k in CacheStatistics.RESETTABLE_KEYS | CacheStatistics.NON_RESETTABLE_KEYS:
             if k not in self._stats:
@@ -1117,7 +1118,7 @@ clcache statistics:
     called w/o source          : {}
     called w/ multiple sources : {}
     called w/ PCH              : {}""".strip().format(
-        cache.cacheDirectory(),
+        cache.cacheConfigDirectory(),
         stats.currentCacheSize(),
         cfg.maximumCacheSize(),
         stats.numCacheEntries(),
