@@ -103,7 +103,7 @@ class LogicException(Exception):
         return repr(self.message)
 
 
-class ObjectCacheLock(object):
+class ObjectCacheFileLock(object):
     """ Implements a lock for the object cache which
     can be used in 'with' statements. """
     INFINITE = 0xFFFFFFFF
@@ -145,6 +145,14 @@ class ObjectCacheLock(object):
         self._acquired = False
 
 
+class ObjectCacheDummyLock(object):
+    def __enter__(self):
+        pass
+
+    def __exit__(self, typ, value, traceback):
+        pass
+
+
 class ObjectCacheFileStrategy(object):
     def __init__(self):
         try:
@@ -157,7 +165,7 @@ class ObjectCacheFileStrategy(object):
         ensureDirectoryExists(self.objectsDir)
         lockName = self.cacheDirectory().replace(':', '-').replace('\\', '-')
         timeoutMs = int(os.environ.get('CLCACHE_OBJECT_CACHE_TIMEOUT_MS', 10 * 1000))
-        self.lock = ObjectCacheLock(lockName, timeoutMs)
+        self.lock = ObjectCacheFileLock(lockName, timeoutMs)
 
     def cacheDirectory(self):
         return self.dir
@@ -403,16 +411,19 @@ class PersistentJSONDict(object):
         self._dirty = False
         self._dict = {}
         self._fileName = fileName
+        lockName = os.path.dirname(fileName).replace(':', '-').replace('\\', '-')
+        timeoutMs = int(os.environ.get('CLCACHE_OBJECT_CACHE_TIMEOUT_MS', 10 * 1000))
+        self.lock = ObjectCacheFileLock(lockName, timeoutMs)
         try:
-            with open(self._fileName, 'r') as f:
-                self._dict = json.load(f)
+            with self.lock, open(self._fileName, 'r') as f:
+                    self._dict = json.load(f)
         except IOError:
             pass
 
     def save(self):
         if self._dirty:
-            with open(self._fileName, 'w') as f:
-                json.dump(self._dict, f, sort_keys=True, indent=4)
+            with self.lock, open(self._fileName, 'w') as f:
+                    json.dump(self._dict, f, sort_keys=True, indent=4)
 
     def __setitem__(self, key, value):
         self._dict[key] = value
