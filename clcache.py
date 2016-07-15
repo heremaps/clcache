@@ -239,6 +239,15 @@ class ObjectCacheFileStrategy(object):
     def hasEntry(self, key):
         return os.path.exists(self.cachedObjectName(key)) or os.path.exists(self._cachedCompilerOutputName(key))
 
+    def getEntry(self, key, outputFile):
+        if outputFile is not None:
+            if os.path.exists(outputFile):
+                os.remove(outputFile)
+            copyOrLink(self.cachedObjectName(key), outputFile)
+        compilerOutput = self.cachedCompilerOutput(key)
+        compilerStderr = self.cachedCompilerStderr(key)
+        return compilerOutput, compilerStderr
+
     def setEntry(self, key, objectFileName, compilerOutput, compilerStderr):
         ensureDirectoryExists(self._cacheEntryDir(key))
         if objectFileName is not None:
@@ -349,6 +358,9 @@ class ObjectCache(object):
 
     def hasEntry(self, key):
         return self.strategy.hasEntry(key)
+
+    def getEntry(self, key, outfile):
+        return self.strategy.getEntry(key, outfile)
 
     def setEntry(self, key, objectFileName, compilerOutput, compilerStderr):
         return self.strategy.setEntry(key, objectFileName, compilerOutput, compilerStderr)
@@ -1212,14 +1224,10 @@ def processCacheHit(cache, outputFile, cachekey):
     stats.registerCacheHit()
     stats.save()
     printTraceStatement("Reusing cached object for key {} for output file {}".format(cachekey, outputFile))
-    if outputFile is not None:
-        if os.path.exists(outputFile):
-            os.remove(outputFile)
-        copyOrLink(cache.cachedObjectName(cachekey), outputFile)
-    compilerOutput = cache.cachedCompilerOutput(cachekey)
-    compilerStderr = cache.cachedCompilerStderr(cachekey)
+    compilerStdout, compilerStderr = cache.getEntry(cachekey, outputFile)
+
     printTraceStatement("Finished. Exit code 0")
-    return 0, compilerOutput, compilerStderr
+    return 0, compilerStdout, compilerStderr
 
 
 def postprocessObjectEvicted(cache, outputFile, cachekey, compilerResult):
@@ -1468,11 +1476,7 @@ def processNoDirect(cache, outputFile, compiler, cmdLine):
             stats.registerCacheHit()
             stats.save()
             printTraceStatement("Reusing cached object for key {} for output file {}".format(cachekey, outputFile))
-            if outputFile is not None and os.path.exists(outputFile):
-                os.remove(outputFile)
-            copyOrLink(cache.cachedObjectName(cachekey), outputFile)
-            compilerStdout = cache.cachedCompilerOutput(cachekey)
-            compilerStderr = cache.cachedCompilerStderr(cachekey)
+            compilerStdout, compilerStderr = cache.getEntry(cachekey, outputFile)
             printTraceStatement("Finished. Exit code 0")
             return 0, compilerStdout, compilerStderr
 
