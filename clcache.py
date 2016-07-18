@@ -298,9 +298,67 @@ class ObjectCacheFileStrategy(object):
         return ''
 
 
+class ObjectCacheMemcacheStrategy(object):
+    MANIFEST_PREFIX = "manifests_"
+    OBJECT_PREIFX = "objects_"
+
+    def __init__(self, server):
+        self.lock = ObjectCacheDummyLock()
+        self.local_cache = {}
+        from memcache import Client
+
+        self.mc = Client(servers=[server])
+
+    def getManifest(self, manifestHash):
+        return self.mc.get(self.MANIFEST_PREFIX + manifestHash)
+
+    def setManifest(self, manifestHash, manifest):
+        return self.mc.set(self.MANIFEST_PREFIX + manifestHash, manifest)
+
+    def fetchEntry(self, key):  #XX todo return data
+        data = self.mc.get(self.OBJECT_PREIFX + key)
+        if data is not None:
+            self.local_cache[key] = data
+            return True
+        else:
+            self.local_cache[key] = None
+            return None
+
+    def hasEntry(self, key):
+        return self.fetchEntry(key)
+
+    def getEntry(self, key, outputFile):
+        if key not in self.local_cache:
+            self.fetchEntry(key)
+        if self.local_cache[key] is None:
+            raise ValueError  # a fallback to FileCache can be implemented here or by handling this exception
+        data = self.local_cache[key]
+        with open(outputFile, 'wb') as f:
+            f.write(data[0])
+        return data[1].decode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC), data[2].decode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC)
+
+    def setEntry(self, key, objectFileName, compilerOutput, compilerStderr):
+        with open(objectFileName, 'rb') as objectFile:
+            return self.mc.set(self.OBJECT_PREIFX + key,
+                           [objectFile.read(),
+                            compilerOutput.encode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC),
+                            compilerStderr.encode(CACHE_COMPILER_OUTPUT_STORAGE_CODEC)])
+
+    def clean(self, stats, maximumSize):
+        pass
+
+    def removeObjects(self, stats, removedObjects):
+        # memcached can handle cache invalidation
+        # this means I cannot delete specific objects in memcache
+        # think about implications for test cases
+        pass
+
 class ObjectCache(object):
     def __init__(self):
-        self.strategy = ObjectCacheFileStrategy()
+        if os.environ.get("CLCACHE_MEMCACHED"):
+            self.strategy = ObjectCacheMemcacheStrategy(os.environ.get("CLCACHE_MEMCACHED"))
+        else:
+            self.strategy = ObjectCacheFileStrategy()
         self.config = ObjectCacheFileStrategy()
 
     def cacheConfigDirectory(self):
