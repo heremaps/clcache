@@ -11,6 +11,7 @@ import cProfile
 import codecs
 from collections import defaultdict, namedtuple
 import contextlib
+import datetime
 import errno
 import hashlib
 import json
@@ -21,6 +22,7 @@ from subprocess import Popen, PIPE
 import sys
 import multiprocessing
 import re
+import time
 
 VERSION = "3.3.0-dev"
 
@@ -263,6 +265,7 @@ class CacheLock(object):
             wintypes.INT(0),
             self._mutexName)
         self._timeoutMs = timeoutMs
+        print("[{}]: CacheLock: created lock {}...".format(os.getpid(), self._mutexName))
         assert self._mutex
 
     def __enter__(self):
@@ -273,10 +276,16 @@ class CacheLock(object):
 
     def __del__(self):
         windll.kernel32.CloseHandle(self._mutex)
+        print("[{}]: CacheLock: closed lock handle for lock {}...".format(os.getpid(), self._mutexName))
 
     def acquire(self):
+        print("[{}]: CacheLock: trying to acquire lock {}...".format(os.getpid(), self._mutexName))
+        start = datetime.datetime.now()
+        time.sleep(1)
         result = windll.kernel32.WaitForSingleObject(
             self._mutex, wintypes.INT(self._timeoutMs))
+        duration = datetime.datetime.now() - start
+        print("[{}]: CacheLock: finished waiting for lock {} after {}.{}s...".format(os.getpid(), self._mutexName, duration.seconds, duration.microseconds))
         if result not in [0, self.WAIT_ABANDONED_CODE]:
             if result == self.WAIT_TIMEOUT_CODE:
                 errorString = \
@@ -291,6 +300,7 @@ class CacheLock(object):
 
     def release(self):
         windll.kernel32.ReleaseMutex(self._mutex)
+        print("[{}]: CacheLock: released lock {}...".format(os.getpid(), self._mutexName))
 
     @staticmethod
     def forPath(path):
