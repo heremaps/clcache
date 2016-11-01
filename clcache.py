@@ -13,6 +13,7 @@ import cProfile
 import codecs
 import contextlib
 import errno
+from functools import lru_cache
 import hashlib
 import json
 import multiprocessing
@@ -751,6 +752,7 @@ def getCompilerHash(compilerBinary):
     return hasher.hexdigest()
 
 
+@lru_cache(maxsize=None)
 def getFileHash(filePath, additionalData=None):
     hasher = HashAlgorithm()
     with open(filePath, 'rb') as inFile:
