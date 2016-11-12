@@ -21,6 +21,14 @@ Installation
 
 Python 3.3+ is required.
 
+Install dependencies
+^^^^^^^^^^^^^^^^^^^^
+
+clcache uses https://pypi.python.org/pypi/xxhash[xxhash] for file hashing.
+Install it via:
+
+    pip install xxhash
+
 Installation via exe
 ^^^^^^^^^^^^^^^^^^^^
 

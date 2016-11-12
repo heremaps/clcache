@@ -13,7 +13,6 @@ import cProfile
 import codecs
 import contextlib
 import errno
-import hashlib
 import json
 import multiprocessing
 import os
@@ -21,11 +20,12 @@ import re
 import signal
 import subprocess
 import sys
+import xxhash
 from tempfile import TemporaryFile
 
 VERSION = "3.3.1-dev"
 
-HashAlgorithm = hashlib.md5
+HashAlgorithm = xxhash.xxh64
 
 # try to use os.scandir or scandir.scandir
 # fall back to os.listdir if not found
@@ -192,7 +192,7 @@ class ManifestRepository(object):
     # invalidation, such that a manifest that was stored using the old format is not
     # interpreted using the new format. Instead the old file will not be touched
     # again due to a new manifest hash and is cleaned away after some time.
-    MANIFEST_FILE_FORMAT_VERSION = 6
+    MANIFEST_FILE_FORMAT_VERSION = 7
 
     def __init__(self, manifestsRootDir):
         self._manifestsRootDir = manifestsRootDir
