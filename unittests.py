@@ -34,7 +34,7 @@ from clcache import (
     NoSourceFileError,
     PersistentJSONDict,
 )
-from storage import CacheMemcacheStrategy, CacheDummyLock
+from storage import CacheMemcacheStrategy
 
 ASSETS_DIR = os.path.join("tests", "unittests")
 
@@ -1054,8 +1054,9 @@ class TestMemcacheStrategy(unittest.TestCase):
             self.assertEqual(memcache.getEntry(key).stdout, artifact.stdout)
             self.assertEqual(memcache.getEntry(key).stderr, artifact.stderr)
 
-            non_artifact = CompilerArtifacts("random.txt", "stdout", "stderr")
-            self.assertRaises(FileNotFoundError, memcache.setEntry('hello', artifact))
+            nonArtifact = CompilerArtifacts("random.txt", "stdout", "stderr")
+            with self.assertRaises(FileNotFoundError):
+                memcache.setEntry(key, nonArtifact)
 
     def testArgumentParsing(self):
         with self.assertRaises(ValueError):
@@ -1081,9 +1082,9 @@ class TestMemcacheStrategy(unittest.TestCase):
         with self.assertRaises(ValueError):
             CacheMemcacheStrategy.splitHosts("localhost.local:12345,")
         with self.assertRaises(ValueError):
-            ValueError, CacheMemcacheStrategy.splitHosts("localhost.local,12345:")
+            CacheMemcacheStrategy.splitHosts("localhost.local,12345:")
         with self.assertRaises(ValueError):
-            ValueError, CacheMemcacheStrategy.splitHosts("localhost.local;12345:")
+            CacheMemcacheStrategy.splitHosts("localhost.local;12345:")
 
 
 if __name__ == '__main__':
