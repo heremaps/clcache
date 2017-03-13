@@ -1741,8 +1741,8 @@ def ensureArtifactsExist(cache, cachekey, reason, objectFile, compilerResult, ex
                 if returnCode == 0 and os.path.exists(objectFile):
                     artifacts = CompilerArtifacts(objectFile, compilerOutput, compilerStderr)
                     cleanupRequired = addObjectToCache(stats, cache, cachekey, artifacts)
-                    if extraCallable:
-                        extraCallable()
+            if extraCallable:
+                extraCallable()
     return returnCode, compilerOutput, compilerStderr, cleanupRequired
 
 
