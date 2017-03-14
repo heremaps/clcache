@@ -720,7 +720,8 @@ class Statistics(object):
         self.lock = CacheLock.forPath(self._statsFile)
 
     def __enter__(self):
-        self._stats = PersistentJSONDict(self._statsFile)
+        with self.lock:
+            self._stats = PersistentJSONDict(self._statsFile)
         for k in Statistics.RESETTABLE_KEYS | Statistics.NON_RESETTABLE_KEYS:
             if k not in self._stats:
                 self._stats[k] = 0
@@ -728,7 +729,8 @@ class Statistics(object):
 
     def __exit__(self, typ, value, traceback):
         # Does not write to disc when unchanged
-        self._stats.save()
+        with self.lock:
+            self._stats.save()
 
     def __eq__(self, other):
         return type(self) is type(other) and self.__dict__ == other.__dict__
@@ -743,7 +745,7 @@ class Statistics(object):
         return self._stats[Statistics.CALLS_WITHOUT_SOURCE_FILE]
 
     def registerCallWithoutSourceFile(self):
-        self._stats[Statistics.CALLS_WITHOUT_SOURCE_FILE] += 1
+
 
     def numCallsWithMultipleSourceFiles(self):
         return self._stats[Statistics.CALLS_WITH_MULTIPLE_SOURCE_FILES]
@@ -1445,14 +1447,13 @@ def parseIncludesSet(compilerOutput, sourceFile, strip):
         return includesSet, compilerOutput
 
 
-def addObjectToCache(stats, cache, cachekey, artifacts):
-    # This function asserts that the caller locked 'section' and 'stats'
-    # already and also saves them
+def addObjectToCache(cache, cachekey, artifacts):
     printTraceStatement("Adding file {} to cache using key {}".format(artifacts.objectFilePath, cachekey))
 
-    cache.setEntry(cachekey, artifacts)
-    stats.registerCacheEntry(os.path.getsize(artifacts.objectFilePath))
+    with cache.lockFor(cachekey):
+        cache.setEntry(cachekey, artifacts)
 
+    cache.statistics.registerCacheEntry(os.path.getsize(artifacts.objectFilePath))
     with cache.configuration as cfg:
         return stats.currentCacheSize() >= cfg.maximumCacheSize()
 
@@ -1461,8 +1462,7 @@ def processCacheHit(cache, objectFile, cachekey):
     printTraceStatement("Reusing cached object for key {} for object file {}".format(cachekey, objectFile))
 
     with cache.lockFor(cachekey):
-        with cache.statistics.lock, cache.statistics as stats:
-            stats.registerCacheHit()
+        cache.statistics.registerCacheHit()
 
         if os.path.exists(objectFile):
             os.remove(objectFile)
@@ -1734,15 +1734,13 @@ def processNoDirect(cache, objectFile, compiler, cmdLine, environment):
 def ensureArtifactsExist(cache, cachekey, reason, objectFile, compilerResult, extraCallable=None):
     cleanupRequired = False
     returnCode, compilerOutput, compilerStderr = compilerResult
-    with cache.lockFor(cachekey):
-        if not cache.hasEntry(cachekey):
-            with cache.statistics.lock, cache.statistics as stats:
-                reason(stats)
-                if returnCode == 0 and os.path.exists(objectFile):
-                    artifacts = CompilerArtifacts(objectFile, compilerOutput, compilerStderr)
-                    cleanupRequired = addObjectToCache(stats, cache, cachekey, artifacts)
-                    if extraCallable:
-                        extraCallable()
+    if not cache.hasEntry(cachekey):
+        reason(cache.statistics)
+        if returnCode == 0 and os.path.exists(objectFile):
+            artifacts = CompilerArtifacts(objectFile, compilerOutput, compilerStderr)
+            cleanupRequired = addObjectToCache(stats, cache, cachekey, artifacts)
+        if extraCallable:
+            extraCallable()
     return returnCode, compilerOutput, compilerStderr, cleanupRequired
 
 
