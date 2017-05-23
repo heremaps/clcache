@@ -1,11 +1,167 @@
 import contextlib
+import os
 
 from pymemcache.client.base import Client
 from pymemcache.serde import (python_memcache_serializer,
                               python_memcache_deserializer)
 
-from clcache import CacheFileStrategy, getStringHash, printTraceStatement, CompilerArtifacts, \
-    CACHE_COMPILER_OUTPUT_STORAGE_CODEC
+from clcache import CacheLock, CompilerArtifacts, CompilerArtifactsRepository, Configuration, ManifestRepository, \
+    Statistics, getStringHash, printTraceStatement, ensureDirectoryExists, CACHE_COMPILER_OUTPUT_STORAGE_CODEC
+
+
+@contextlib.contextmanager
+def allSectionsLocked(repository):
+    sections = list(repository.sections())
+    for section in sections:
+        section.lock.acquire()
+    try:
+        yield
+    finally:
+        for section in sections:
+            section.lock.release()
+
+
+class Cache(object):
+    def __init__(self, cacheDirectory=None):
+        if os.environ.get("CLCACHE_MEMCACHED"):
+            from storage import CacheFileWithMemcacheFallbackStrategy
+            self.strategy = CacheFileWithMemcacheFallbackStrategy(os.environ.get("CLCACHE_MEMCACHED"),
+                                                                  cacheDirectory=cacheDirectory)
+        else:
+            self.strategy = CacheFileStrategy(cacheDirectory=cacheDirectory)
+
+    def __str__(self):
+        return str(self.strategy)
+
+    @property
+    def lock(self):
+        return self.strategy.lock
+
+    @contextlib.contextmanager
+    def manifestLockFor(self, key):
+        with self.strategy.manifestLockFor(key):
+            yield
+
+    @property
+    def configuration(self):
+        return self.strategy.configuration
+
+    @property
+    def statistics(self):
+        return self.strategy.statistics
+
+    def clean(self, stats, maximumSize):
+        return self.strategy.clean(stats, maximumSize)
+
+    @contextlib.contextmanager
+    def lockFor(self, key):
+        with self.strategy.lockFor(key):
+            yield
+
+    def getEntry(self, key):
+        return self.strategy.getEntry(key)
+
+    def setEntry(self, key, value):
+        self.strategy.setEntry(key, value)
+
+    def hasEntry(self, cachekey):
+        return self.strategy.hasEntry(cachekey)
+
+    def setManifest(self, manifestHash, manifest):
+        self.strategy.setManifest(manifestHash, manifest)
+
+    def getManifest(self, manifestHash):
+        return self.strategy.getManifest(manifestHash)
+
+
+class CacheFileStrategy(object):
+    def __init__(self, cacheDirectory=None):
+        self.dir = cacheDirectory
+        if not self.dir:
+            try:
+                self.dir = os.environ["CLCACHE_DIR"]
+            except KeyError:
+                self.dir = os.path.join(os.path.expanduser("~"), "clcache")
+
+        manifestsRootDir = os.path.join(self.dir, "manifests")
+        ensureDirectoryExists(manifestsRootDir)
+        self.manifestRepository = ManifestRepository(manifestsRootDir)
+
+        compilerArtifactsRootDir = os.path.join(self.dir, "objects")
+        ensureDirectoryExists(compilerArtifactsRootDir)
+        self.compilerArtifactsRepository = CompilerArtifactsRepository(compilerArtifactsRootDir)
+
+        self.configuration = Configuration(os.path.join(self.dir, "config.txt"))
+        self.statistics = Statistics(os.path.join(self.dir, "stats.txt"))
+
+    def __str__(self):
+        return "Disk cache at {}".format(self.dir)
+
+    @property
+    @contextlib.contextmanager
+    def lock(self):
+        with allSectionsLocked(self.manifestRepository), \
+             allSectionsLocked(self.compilerArtifactsRepository), \
+             self.statistics.lock:
+            yield
+
+    def lockFor(self, key):
+        assert isinstance(self.compilerArtifactsRepository.section(key).lock, CacheLock)
+        return self.compilerArtifactsRepository.section(key).lock
+
+    def manifestLockFor(self, key):
+        return self.manifestRepository.section(key).lock
+
+    def getEntry(self, key):
+        return self.compilerArtifactsRepository.section(key).getEntry(key)
+
+    def setEntry(self, key, value):
+        self.compilerArtifactsRepository.section(key).setEntry(key, value)
+
+    def pathForObject(self, key):
+        return self.compilerArtifactsRepository.section(key).cachedObjectName(key)
+
+    def directoryForCache(self, key):
+        return self.compilerArtifactsRepository.section(key).cacheEntryDir(key)
+
+    def deserializeCacheEntry(self, key, objectData):
+        path = self.pathForObject(key)
+        ensureDirectoryExists(self.directoryForCache(key))
+        with open(path, 'wb') as f:
+            f.write(objectData)
+        return path
+
+    def hasEntry(self, cachekey):
+        return self.compilerArtifactsRepository.section(cachekey).hasEntry(cachekey)
+
+    def setManifest(self, manifestHash, manifest):
+        self.manifestRepository.section(manifestHash).setManifest(manifestHash, manifest)
+
+    def getManifest(self, manifestHash):
+        return self.manifestRepository.section(manifestHash).getManifest(manifestHash)
+
+    def clean(self, stats, maximumSize):
+        currentSize = stats.currentCacheSize()
+        if currentSize < maximumSize:
+            return
+
+        # Free at least 10% to avoid cleaning up too often which
+        # is a big performance hit with large caches.
+        effectiveMaximumSizeOverall = maximumSize * 0.9
+
+        # Split limit in manifests (10 %) and objects (90 %)
+        effectiveMaximumSizeManifests = effectiveMaximumSizeOverall * 0.1
+        effectiveMaximumSizeObjects = effectiveMaximumSizeOverall - effectiveMaximumSizeManifests
+
+        # Clean manifests
+        currentSizeManifests = self.manifestRepository.clean(effectiveMaximumSizeManifests)
+
+        # Clean artifacts
+        currentCompilerArtifactsCount, currentCompilerArtifactsSize = self.compilerArtifactsRepository.clean(
+            effectiveMaximumSizeObjects)
+
+        stats.setCacheSize(currentCompilerArtifactsSize + currentSizeManifests)
+        stats.setNumCacheEntries(currentCompilerArtifactsCount)
 
 
 class CacheDummyLock(object):
