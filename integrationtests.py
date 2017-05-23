@@ -235,7 +235,7 @@ class TestHits(unittest.TestCase):
             cmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c", 'hit.cpp']
             subprocess.check_call(cmd) # Ensure it has been compiled before
 
-            cache = clcache.Cache()
+            cache = clcache.Storage()
             with cache.statistics as stats:
                 oldHits = stats.numCacheHits()
             subprocess.check_call(cmd) # This must hit now
@@ -245,7 +245,7 @@ class TestHits(unittest.TestCase):
 
     def testAlternatingHeadersHit(self):
         with cd(os.path.join(ASSETS_DIR, "hits-and-misses")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             baseCmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
 
@@ -296,7 +296,7 @@ class TestHits(unittest.TestCase):
 
     def testRemovedHeader(self):
         with cd(os.path.join(ASSETS_DIR, "hits-and-misses")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             baseCmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
 
@@ -347,7 +347,7 @@ class TestHits(unittest.TestCase):
 
     def testAlternatingTransitiveHeader(self):
         with cd(os.path.join(ASSETS_DIR, "hits-and-misses")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             baseCmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
 
@@ -398,7 +398,7 @@ class TestHits(unittest.TestCase):
 
     def testRemovedTransitiveHeader(self):
         with cd(os.path.join(ASSETS_DIR, "hits-and-misses")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             baseCmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
 
@@ -449,7 +449,7 @@ class TestHits(unittest.TestCase):
 
     def testAlternatingIncludeOrder(self):
         with cd(os.path.join(ASSETS_DIR, "hits-and-misses")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             baseCmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
 
@@ -509,7 +509,7 @@ class TestHits(unittest.TestCase):
 
     def testRepeatedIncludes(self):
         with cd(os.path.join(ASSETS_DIR, "hits-and-misses")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             baseCmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
 
@@ -660,7 +660,7 @@ class TestHeaderMiss(unittest.TestCase):
         with cd(os.path.join(ASSETS_DIR, "header-miss-obsolete")), tempfile.TemporaryDirectory() as tempDir:
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             compileCmd = CLCACHE_CMD + ["/I.", "/nologo", "/EHsc", "/c", "main.cpp"]
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
 
             with open("A.h", "w") as header:
                 header.write('#define INFO 1337\n')
@@ -731,7 +731,7 @@ class RunParallelBase:
             # Compile first time
             self._buildAll()
 
-            cache = clcache.Cache()
+            cache = clcache.Storage()
             with cache.statistics as stats:
                 hits = stats.numCacheHits()
                 misses = stats.numCacheMisses()
@@ -740,7 +740,7 @@ class RunParallelBase:
             # Compile second time
             self._buildAll()
 
-            cache = clcache.Cache()
+            cache = clcache.Storage()
             with cache.statistics as stats:
                 hits = stats.numCacheHits()
                 misses = stats.numCacheMisses()
@@ -748,7 +748,7 @@ class RunParallelBase:
 
     def testHitViaMpSequential(self):
         with cd(os.path.join(ASSETS_DIR, "parallel")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
 
             customEnv = self._createEnv(tempDir)
 
@@ -777,7 +777,7 @@ class RunParallelBase:
 
     def testHitsViaMpConcurrent(self):
         with cd(os.path.join(ASSETS_DIR, "parallel")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
 
             customEnv = self._createEnv(tempDir)
 
@@ -808,7 +808,7 @@ class RunParallelBase:
     def testOutput(self):
         with cd(os.path.join(ASSETS_DIR, "parallel")), tempfile.TemporaryDirectory() as tempDir:
             sources = glob.glob("*.cpp")
-            clcache.Cache(tempDir)
+            clcache.Storage(tempDir)
             customEnv = self._createEnv(tempDir)
             cmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
             mpFlag = "/MP" + str(len(sources))
@@ -825,7 +825,7 @@ class TestRunParallel(RunParallelBase, unittest.TestCase):
 class TestMultipleSources(unittest.TestCase):
     def testTwo(self):
         with cd(os.path.join(ASSETS_DIR, "mutiple-sources")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             baseCmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
 
@@ -850,7 +850,7 @@ class TestMultipleSources(unittest.TestCase):
 
     def testFive(self):
         with cd(os.path.join(ASSETS_DIR, "mutiple-sources")), tempfile.TemporaryDirectory() as tempDir:
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
             baseCmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c"]
 
@@ -898,7 +898,7 @@ class TestClearing(unittest.TestCase):
         subprocess.check_call(CLCACHE_CMD + ["-C"])
 
     def testClearIdempotency(self):
-        cache = clcache.Cache()
+        cache = clcache.Storage()
 
         self._clearCache()
         with cache.statistics as stats:
@@ -914,7 +914,7 @@ class TestClearing(unittest.TestCase):
     @pytest.mark.skipif("CLCACHE_MEMCACHED" in os.environ,
                         reason="clearing on memcached not implemented")
     def testClearPostcondition(self):
-        cache = clcache.Cache()
+        cache = clcache.Storage()
 
         # Compile a random file to populate cache
         cmd = CLCACHE_CMD + ["/nologo", "/EHsc", "/c", os.path.join(ASSETS_DIR, "fibonacci.cpp")]
@@ -989,7 +989,7 @@ class TestPreprocessorCalls(unittest.TestCase):
             ["/nologo", "/E", "/EP"],
         ]
 
-        cache = clcache.Cache()
+        cache = clcache.Storage()
         with cache.statistics as stats:
             oldPreprocessorCalls = stats.numCallsForPreprocessing()
 
@@ -1005,7 +1005,7 @@ class TestNoDirectCalls(RunParallelBase, unittest.TestCase):
     env = dict(os.environ, CLCACHE_NODIRECT="1")
 
     def testPreprocessorFailure(self):
-        cache = clcache.Cache()
+        cache = clcache.Storage()
         oldStats = copy.copy(cache.statistics)
 
         cmd = CLCACHE_CMD + ["/nologo", "/c", "doesnotexist.cpp"]
@@ -1019,7 +1019,7 @@ class TestNoDirectCalls(RunParallelBase, unittest.TestCase):
 
             self.assertEqual(subprocess.call(cmd, env=self.env), 0)
 
-            cache = clcache.Cache()
+            cache = clcache.Storage()
             with cache.statistics as stats:
                 oldHits = stats.numCacheHits()
 
@@ -1040,7 +1040,7 @@ class TestBasedir(unittest.TestCase):
         for buildDir in ["builddir_a", "builddir_b"]:
             shutil.copytree(self.projectDir, buildDir)
 
-        self.cache = clcache.Cache(self.clcacheDir)
+        self.cache = clcache.Storage(self.clcacheDir)
 
     def tearDown(self):
         os.chdir(self.savedCwd)
@@ -1139,7 +1139,7 @@ class TestCleanCache(unittest.TestCase):
             subprocess.check_call(cmd, env=customEnv)
 
             # Remove object
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             clcache.cleanCache(cache)
 
             self.assertEqual(subprocess.call(cmd, env=customEnv), 0)
@@ -1153,7 +1153,7 @@ class TestCleanCache(unittest.TestCase):
             subprocess.check_call(cmd, env=customEnv)
 
             # Remove manifest
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
             clcache.clearCache(cache)
 
             self.assertEqual(subprocess.call(cmd, env=customEnv), 0)

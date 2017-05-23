@@ -53,7 +53,7 @@ class TestConcurrency(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempDir:
             customEnv = dict(os.environ, CLCACHE_DIR=tempDir)
 
-            cache = clcache.Cache(tempDir)
+            cache = clcache.Storage(tempDir)
 
             with cache.statistics as stats:
                 self.assertEqual(stats.numCacheHits(), 0)

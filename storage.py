@@ -46,13 +46,13 @@ class Configuration(object):
         self._cfg["MaximumCacheSize"] = size
 
 
-class Cache(object):
+class Storage(object):
     def __init__(self, cacheDirectory=None):
         if os.environ.get("CLCACHE_MEMCACHED"):
-            self.strategy = CacheFileWithMemcacheFallbackStrategy(os.environ.get("CLCACHE_MEMCACHED"),
-                                                                  cacheDirectory=cacheDirectory)
+            self.strategy = FileAndMemcacheStrategy(os.environ.get("CLCACHE_MEMCACHED"),
+                                                    cacheDirectory=cacheDirectory)
         else:
-            self.strategy = CacheFileStrategy(cacheDirectory=cacheDirectory)
+            self.strategy = FileStrategy(cacheDirectory=cacheDirectory)
 
     def __str__(self):
         return str(self.strategy)
@@ -98,7 +98,7 @@ class Cache(object):
         return self.strategy.getManifest(manifestHash)
 
 
-class CacheFileStrategy(object):
+class FileStrategy(object):
     def __init__(self, cacheDirectory=None):
         self.dir = cacheDirectory
         if not self.dir:
@@ -196,9 +196,9 @@ class CacheDummyLock(object):
         pass
 
 
-class CacheMemcacheStrategy(object):
+class MemcacheStrategy(object):
     def __init__(self, server, cacheDirectory=None, manifestPrefix='manifests_', objectPrefix='objects_'):
-        self.fileStrategy = CacheFileStrategy(cacheDirectory=cacheDirectory)
+        self.fileStrategy = FileStrategy(cacheDirectory=cacheDirectory)
         # XX Memcache Strategy should be independent
 
         self.lock = CacheDummyLock()
@@ -210,7 +210,7 @@ class CacheMemcacheStrategy(object):
         self.connect(server)
 
     def connect(self, server):
-        server = CacheMemcacheStrategy.splitHosts(server)
+        server = MemcacheStrategy.splitHosts(server)
         assert server, "{} is not a suitable server".format(server)
         if len(server) == 1:
             clientClass = Client
@@ -250,7 +250,7 @@ class CacheMemcacheStrategy(object):
         :param hosts: A string in the format of HOST:PORT[,HOST:PORT]
         :return: a list [(HOST, int(PORT)), ..] of tuples that can be consumed by socket.connect()
         """
-        return [CacheMemcacheStrategy.splitHost(h) for h in hosts.split(',')]
+        return [MemcacheStrategy.splitHost(h) for h in hosts.split(',')]
 
     def __str__(self):
         return "Remote Memcache @{} object-prefix: {}".format(self.server, self.objectPrefix)
@@ -336,12 +336,12 @@ class CacheMemcacheStrategy(object):
                                 maximumSize)
 
 
-class CacheFileWithMemcacheFallbackStrategy(object):
+class FileAndMemcacheStrategy(object):
     def __init__(self, server, cacheDirectory=None, manifestPrefix='manifests_', objectPrefix='objects_'):
-        self.localCache = CacheFileStrategy(cacheDirectory=cacheDirectory)
-        self.remoteCache = CacheMemcacheStrategy(server, cacheDirectory=cacheDirectory,
-                                                 manifestPrefix=manifestPrefix,
-                                                 objectPrefix=objectPrefix)
+        self.localCache = FileStrategy(cacheDirectory=cacheDirectory)
+        self.remoteCache = MemcacheStrategy(server, cacheDirectory=cacheDirectory,
+                                            manifestPrefix=manifestPrefix,
+                                            objectPrefix=objectPrefix)
 
     def __str__(self):
         return "CacheFileWithMemcacheFallbackStrategy local({}) and remote({})".format(self.localCache,

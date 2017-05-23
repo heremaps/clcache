@@ -24,7 +24,7 @@ import subprocess
 import sys
 import threading
 from tempfile import TemporaryFile
-from storage import Cache
+from storage import Storage
 
 VERSION = "4.1.0-dev"
 
@@ -1326,7 +1326,7 @@ clcache.py v{}
 """.strip().format(VERSION))
         return 0
 
-    cache = Cache()
+    cache = Storage()
 
     if len(sys.argv) == 2 and sys.argv[1] == "-s":
         with cache.lock:
@@ -1467,7 +1467,7 @@ def scheduleJobs(cache, compiler, cmdLine, environment, sourceFiles, objectFiles
 def processSingleSource(compiler, cmdLine, sourceFile, objectFile, environment):
     try:
         assert objectFile is not None
-        cache = Cache()
+        cache = Storage()
 
         if 'CLCACHE_NODIRECT' in os.environ:
             return processNoDirect(cache, objectFile, compiler, cmdLine, environment)
