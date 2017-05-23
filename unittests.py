@@ -19,7 +19,6 @@ import clcache
 from clcache import (
     CommandLineAnalyzer,
     CompilerArtifactsRepository,
-    Configuration,
     Manifest,
     ManifestEntry,
     ManifestRepository,
@@ -34,7 +33,7 @@ from clcache import (
     NoSourceFileError,
     PersistentJSONDict,
 )
-from storage import CacheMemcacheStrategy
+from storage import CacheMemcacheStrategy, Configuration
 
 ASSETS_DIR = os.path.join("tests", "unittests")
 

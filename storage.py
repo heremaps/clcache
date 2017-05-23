@@ -5,7 +5,7 @@ from pymemcache.client.base import Client
 from pymemcache.serde import (python_memcache_serializer,
                               python_memcache_deserializer)
 
-from clcache import CacheLock, CompilerArtifacts, CompilerArtifactsRepository, Configuration, ManifestRepository, \
+from clcache import CacheLock, CompilerArtifacts, CompilerArtifactsRepository, PersistentJSONDict, ManifestRepository, \
     Statistics, getStringHash, printTraceStatement, ensureDirectoryExists, CACHE_COMPILER_OUTPUT_STORAGE_CODEC
 
 
@@ -21,10 +21,34 @@ def allSectionsLocked(repository):
             section.lock.release()
 
 
+class Configuration(object):
+    _defaultValues = {"MaximumCacheSize": 1073741824} # 1 GiB
+
+    def __init__(self, configurationFile):
+        self._configurationFile = configurationFile
+        self._cfg = None
+
+    def __enter__(self):
+        self._cfg = PersistentJSONDict(self._configurationFile)
+        for setting, defaultValue in self._defaultValues.items():
+            if setting not in self._cfg:
+                self._cfg[setting] = defaultValue
+        return self
+
+    def __exit__(self, typ, value, traceback):
+        # Does not write to disc when unchanged
+        self._cfg.save()
+
+    def maximumCacheSize(self):
+        return self._cfg["MaximumCacheSize"]
+
+    def setMaximumCacheSize(self, size):
+        self._cfg["MaximumCacheSize"] = size
+
+
 class Cache(object):
     def __init__(self, cacheDirectory=None):
         if os.environ.get("CLCACHE_MEMCACHED"):
-            from storage import CacheFileWithMemcacheFallbackStrategy
             self.strategy = CacheFileWithMemcacheFallbackStrategy(os.environ.get("CLCACHE_MEMCACHED"),
                                                                   cacheDirectory=cacheDirectory)
         else:
